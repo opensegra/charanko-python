@@ -1,0 +1,40 @@
+Basic steps for an HLS downloader engine, following how charanko already does it ([HlsClient.ts](src/client/HlsClient.ts), [Charanko.ts](src/downloader/Charanko.ts)):
+
+1. **Fetch the playlist.** Download the `.m3u8` URL as text. Treat the response as HLS when the content type is `application/vnd.apple.mpegurl` or the URL ends in `.m3u8`.
+
+2. **Check whether it's a master or a media playlist.**
+   - A master playlist has `#EXT-X-STREAM-INF` lines, one per quality.
+   - A media playlist lists the segments directly.
+
+3. **Pick a variant (master playlists only).**
+   - Read `BANDWIDTH` and `RESOLUTION` from each `#EXT-X-STREAM-INF` line. The variant's URI is on the next non-tag line.
+   - Choose by the requested quality: the best height at or below the target. With no quality given, take the highest.
+   - Resolve the variant's URI against the playlist URL and fetch that media playlist.
+
+4. **Parse the media playlist into segments.**
+   - Every non-`#` line is a segment URI. Resolve each one against the playlist URL.
+   - Start numbering at `#EXT-X-MEDIA-SEQUENCE` (default 0) and add 1 per segment.
+   - Note any `#EXT-X-MAP:URI="…"`: that is the fMP4 init segment, which must be written first.
+   - Track the current `#EXT-X-KEY` and attach it to each segment that follows.
+
+5. **Handle encryption.**
+   - For `METHOD=AES-128`, fetch the 16-byte key from its `URI`. Cache keys by URL, since keys can rotate mid-playlist.
+   - Use `IV=0x…` if present. Otherwise the IV is the segment's sequence number in the last 4 bytes of a 16-byte buffer.
+   - Decrypt each segment with `aes-128-cbc`. `METHOD=NONE` means no decryption.
+
+6. **Download the segments in order.**
+   - Fetch each segment, retrying a few times with backoff on failure.
+   - Prefetch the next segment while the current one is being written, to keep throughput up.
+   - Write the bytes to the output stream in playlist order, waiting for `drain` when `write()` returns false.
+
+7. **Write to the output.**
+   - Stream into a `.part` file and rename it to the final name once every segment has arrived.
+   - Or hand back a readable stream to the caller.
+   - The result is a `.ts` (or fMP4) file of the joined segments.
+
+8. **Remux (optional).** Run FFmpeg with `-c copy` to turn the `.ts` into `.mp4`. This doesn't re-encode ([FFmpegEngine.ts](src/storage/FFmpegEngine.ts)).
+
+9. **Report progress and support cancellation.**
+   - Report segments done out of the total, and bytes written. An approximate total size is bandwidth × the sum of `#EXTINF` durations.
+   - Check an `AbortSignal` between segments.
+   - On failure, delete the partial file.
