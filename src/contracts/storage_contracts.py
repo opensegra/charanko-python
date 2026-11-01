@@ -2,6 +2,8 @@ import asyncio
 from dataclasses import dataclass
 from typing import Literal
 
+from media_types import OutputType
+
 
 @dataclass
 class FinalizedMedia:
@@ -14,6 +16,7 @@ class FinalizedMedia:
 TranscodePreset = Literal[
     "ultrafast", "superfast", "veryfast", "faster", "fast", "slow"
 ]
+
 
 @dataclass
 class ResolvedFile:
@@ -36,7 +39,40 @@ class TranscodeOptions:
 
 
 @dataclass
+class MediaHints:
+    extension: str | None = None
+    mime_type: str | None = None
+
+
+@dataclass
 class RemuxPipe:
     input: asyncio.StreamWriter
     output: asyncio.StreamReader
     done: asyncio.Task[None]
+
+
+@dataclass
+class StreamSink(RemuxPipe):
+    extension: str
+    mime_type: str
+    filename: str
+
+
+@dataclass
+class StoredFile:
+    original_filename: str
+    extension: str
+    extended_filename: str
+    mime_type: str
+    size_bytes: int
+    path: str
+    is_fmp4: bool | None = None
+
+
+@dataclass
+class SinkOptions:
+    type: OutputType
+    transcode: TranscodeOptions | None = None
+    directory_path: str | None = None
+    filename: str
+    folder: str | None = None

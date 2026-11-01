@@ -29,6 +29,7 @@ class FfmpegEngine:
     def _binary_for(self, options: TranscodeOptions | None = None) -> str:
         return options.ffmpeg_path if options and options.ffmpeg_path else self.binary
 
+    @staticmethod
     def _codec_args(
         video_codec: str | None = None,
         audio_codec: str | None = None,
@@ -40,7 +41,7 @@ class FfmpegEngine:
         if video_codec == "libx264":
             args.extend(["-pix_fmt", "yuv420p", "-profile:v", "high", "-level", "4.2"])
 
-        args.append(["-c:a", audio_codec or "copy"])
+        args.extend(["-c:a", audio_codec or "copy"])
 
         encoding = bool(video_codec) and video_codec != "copy"
         if encoding and crf is not None:
@@ -76,7 +77,7 @@ class FfmpegEngine:
 
         binary = self._binary_for(options)
 
-        process = asyncio.create_subprocess_exec(
+        process = await asyncio.create_subprocess_exec(
             binary,
             *args,
             stdin=asyncio.subprocess.PIPE,
@@ -86,7 +87,7 @@ class FfmpegEngine:
 
         assert process.stdin is not None
         assert process.stdout is not None
-        assert process.stdin is not None
+        assert process.stderr is not None
 
         async def monitor() -> None:
             stderr_tail = bytearray()
@@ -150,8 +151,9 @@ class FfmpegEngine:
             process = await asyncio.create_subprocess_exec(
                 self._binary_for(options),
                 *args,
-                stdout=asyncio.subprocess.PIPE,
-                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
+                stdin=asyncio.subprocess.DEVNULL,
             )
 
             _, stderr = await process.communicate()
