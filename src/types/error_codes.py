@@ -1,0 +1,7 @@
+from enum import Enum
+
+
+class ErrorCode(str, Enum):
+    DOWNLOAD_FAILED = "ERR_DOWNLOAD_FAILED"
+    INVALID_DESTINATION = "INVALID_DESTINATION"
+    NOT_FOUND = "NOT_FOUND"
